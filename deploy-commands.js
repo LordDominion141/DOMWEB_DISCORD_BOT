@@ -3,8 +3,10 @@ import { pingCmd } from './commands/ping.js';
 import { startCmd } from './commands/start.js';
 import { stopCmd } from './commands/stop.js';
 import { switchCmd } from './commands/switch.js';
+import { answerCmd } from './commands/answer.js';
 // THE OTHERS WILL BE HERE SOON...
 import 'dotenv/config';
+
 
 
 // OUR COMMANDS ARRAY
@@ -15,6 +17,7 @@ commands.push(pingCmd.data.toJSON());
 commands.push(startCmd.data.toJSON());
 commands.push(stopCmd.data.toJSON());
 commands.push(switchCmd.data.toJSON());
+commands.push(answerCmd.data.toJSON());
 // THE OTHERS WILL BE HERE SOON...
 
 
