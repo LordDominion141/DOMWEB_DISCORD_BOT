@@ -1,140 +1,230 @@
-import { Client, Events, GatewayIntentBits, MessageFlags, Collection, ActionRowBuilder } from 'discord.js';
-import { pingCmd } from './commands/ping.js';
+import { Client, Events, GatewayIntentBits, MessageFlags, Collection, ActionRowBuilder, Partials } from 'discord.js';
 import { startCmd } from './commands/start.js';
 import { stopCmd } from './commands/stop.js';
 import { switchCmd } from './commands/switch.js';
-// THE OTHERS WILL BE HERE SOON...
-import { beginnerMessages, intermediateMessages, advancedMessages} from './db/messages.js';
+import { answerCmd } from './commands/answer.js';
+import { sourceCmd } from './commands/source.js';
+import { helpCmd } from './commands/help.js';
+import { beginnerQuestions } from './db/beginner.js';
+import { intermediateQuestions } from './db/intermediate.js';
+import { advancedQuestions } from './db/advanced.js'
 import { sendMessage } from './operations/sendMessage.js';
 import { activeSessions } from './states/activeSessions.js';
+import cron from 'node-cron';
 import 'dotenv/config';
+import { helpMessage } from './components/helpMessage.js';
 
 
-// CREATE NEW CLIENT INSTANCE
+const client = new Client({ 
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.DirectMessages
+  ],
+  partials: [Partials.Channel] // Required to receive and route DM events without caching issues
+});
 
-const client = new Client(
-    {intents: [GatewayIntentBits.Guilds]}
-);
 
-// WHEN THE CLIENT IS READY RUN THIS ONCE
+client.commands = new Collection();
+const commandsArray = [startCmd, stopCmd, switchCmd, answerCmd, sourceCmd, helpCmd];
+
+for (const cmd of commandsArray) {
+    client.commands.set(cmd.data.name, cmd);
+}
 
 client.once(Events.ClientReady, (readyClient) => {
     console.log(`Ready! Logged in as ${readyClient.user.tag}`);
 });
 
-// INITIALIZE NEW COMMAND COLLECTION INSTANCE, AS AN OBJECT IN CLIENT.
-
-client.commands = new Collection();
-
-// MAP THE COMMANDS INTO CLIENT
-client.commands.set(pingCmd.data.name, pingCmd);
-client.commands.set(startCmd.data.name, startCmd);
-client.commands.set(stopCmd.data.name, stopCmd);
-client.commands.set(switchCmd.data.name, switchCmd);
-// THE OTHERS WILL BE HERE SOON...
 
 
 
-// LISTENING TO COMMAND INTERACTIONS
+
+
+// CORE FUNCTION
+const sendNextQuestion = async (userId) => {
+    const session = activeSessions.get(userId);
+    if (!session) return;
+    if (session.awaitingAnswer) return;
+
+    const questions = levelMap[session.level];
+    if (!questions) return;
+
+    // 1. Check completion FIRST (runs even if daily limit is reached)
+    if (session.currentIndex >= questions.length) {
+        try {
+            await sendMessage('🎉 YOU HAVE COMPLETED THIS LEVEL!', client, userId);
+        } catch (err) {
+            console.error("Failed to send completion message:", err);
+        }
+        activeSessions.delete(userId);
+        return;
+    }
+
+    // 2. Check daily limit SECOND (stops sending new questions for the day)
+    if (session.sentToday >= session.dailyLimit) {
+         try {
+            await sendMessage("🎉 YOU HAVE COMPLETED TODAY'S SET OF QUESTIONS!", client, userId);
+        } catch (err) {
+            console.error("Failed to send completion message:", err);
+        }
+        return;
+    }
+
+    // 3. Send the next question
+    const q = questions[session.currentIndex];
+    if (q) {
+        try {
+            await sendMessage(`**Q ${session.currentIndex + 1}:** ${q.question}\n\nUse /answer to respond, or /sources for references.`, client, userId);
+            session.awaitingAnswer = true;
+        } catch (err) {
+            console.error("Failed to send question message:", err);
+        }
+    }
+};
+
+
+
+
+     const levelMap = {
+        beginner: beginnerQuestions,
+        intermediate: intermediateQuestions,
+        advanced: advancedQuestions
+    };
+
+    
+
+
+
+
+
+
+
 client.on(Events.InteractionCreate, async (interaction) => {
-        if (!interaction.isChatInputCommand()) return;
-
-         if (interaction.commandName === 'start' && activeSessions.has(interaction.user.id)) {
-               return await interaction.reply({ 
-                content: '⚠️ The daily questioning system is already running. If you want to change your level, use the /switch command. To stop the system, use the /stop command',
-                flags: MessageFlags.Ephemeral }).catch(err => {
-            console.error("Could not send warning message because the interaction timed out:", err.message);
-        });;
+    const userId = interaction.user.id;
+    // 1. Handle Slash Commands
+    if (interaction.isChatInputCommand()) {
+        if (interaction.commandName === 'start' && activeSessions.has(interaction.user.id)) {
+            return await interaction.reply({ 
+                content: '⚠️ The daily questioning system is already running. If you want to change your level, use /switch. To stop, use /stop.',
+                flags: MessageFlags.Ephemeral 
+            }).catch(err => console.error("Interaction reply error:", err.message));
         }
 
-        const command = interaction.client.commands.get(interaction.commandName);
-        if (!command) {
-            console.error(`No command matching ${interaction.commandName} was found`);
-            return;
-        }
+        const command = client.commands.get(interaction.commandName);
+        if (!command) return;
 
         try {
             await command.execute(interaction);
         } catch (error) {
-		console.error(error);
-		if(interaction.replied || interaction.deferred) {
-            await interaction.followUp({
+            console.error(`Error executing ${interaction.commandName}:`, error);
+            const responseOptions = {
                 content: "There was an error while executing this command!",
-                flags: MessageFlags.Ephemeral,
-            })
-        } else {
-            await interaction.reply({
-                content: "There was an error while executing this command!",
-                flags: MessageFlags.Ephemeral,
-            })
+                flags: MessageFlags.Ephemeral
+            };
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(responseOptions);
+            } else {
+                await interaction.reply(responseOptions);
+            }
         }
-	}
-});
+        return;
+    }
 
 
 
+    
 
-// LISTENING TO THE START INTERACTION EVENT (START COMMAND)
 
-client.on(Events.InteractionCreate, async (interaction) => {
-    // FILTER THINGS WE DON'T NEED
-    if (!interaction.isStringSelectMenu()) return;
-    if (interaction.customId !== 'starter') return;
-
+    // 2. Handle String Select Menus
+if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
     try {
-        // DELAY IT A BIT
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const selectedValue = interaction.values[0].toLowerCase();
+        const questions = levelMap[selectedValue];
 
+        if (!questions) {
+            return await interaction.reply({ 
+                content: "❌ Invalid level array configuration found.",
+                flags: MessageFlags.Ephemeral 
+            });
+        }
+
+        // Disable the select menu component directly via interaction.update()
         const row = ActionRowBuilder.from(interaction.message.components[0]);
         row.components[0].setDisabled(true);
-        await interaction.message.edit({components: [row]});
+
+        // Update original message to disable menu AND reply ephemerally to user
+        await interaction.update({ components: [row] });
         
-        const selectedValue = interaction.values[0].toLowerCase();
-	    
-        // ASSIGN THE VALUES OF MESSAGES DYNAMICALLY TO THE CORRESPONDING MESSAGE ARRAY
-        let messages;
-        if (selectedValue === 'beginner') messages = beginnerMessages;
-        if (selectedValue === 'intermediate') messages = intermediateMessages;
-        if (selectedValue === 'advanced') messages = advancedMessages;
+        await interaction.followUp({ 
+            content: `Your JavaScript subject submission of **${selectedValue}** was received successfully!`,
+            flags: MessageFlags.Ephemeral
+        });
 
-        // NO MESSAGES?
-        if (!messages) {
-            return await interaction.editReply({ content: "❌ Invalid level array configuration found." });
-        }
+        const session = {
+            level: selectedValue,
+            currentIndex: 0,
+            awaitingAnswer: false,
+            sentToday: 0,
+            dailyLimit: 5,
+            lastResetDate: Date.now()
+        };
 
-        
-		await interaction.editReply({ content: `Your Javascript subject submission of ${selectedValue} was received successfully!` });
-        
-        let index = 0;
-        const userId = interaction.user.id;
+        const user = await client.users.fetch(userId);
+        const welcomeMessage = await user.send({
+            embeds: [helpMessage]
+        });
 
-        // HELPER FUNCTION
-        const sendNextMessage = () => {
-            if (messages[index]) {
-            sendMessage(messages[index], client, userId);
-            index = index + 1;
+        await welcomeMessage.pin();
 
-            console.log("Sent message to this user")
-            } else {
-                console.log("All messages sent for this level tier!");
-            }
-    };
+        activeSessions.set(userId, session);
+        await sendNextQuestion(userId);
 
-        // CALL THE FUNCTION FIRST ONCE
-        sendNextMessage();
-
-        // THEN CALL IT REPEATEDLY AFTER THE INTERVAL
-        const intervalId = setInterval(sendNextMessage,   1 * 60 * 1000);
-
-        activeSessions.set(userId, { intervalId, level: selectedValue, index});
-	
     } catch (error) {
-            console.error(error);
+        console.error("Error handling select menu:", error);
     }
-	    
+    return;
+}
+    
+
+
+
+    // 3. Handle Modal Submissions
+    if (interaction.isModalSubmit() && interaction.customId === 'answer-modal') {
+        const session = activeSessions.get(userId);
+        if (!session || !session.awaitingAnswer) { 
+            await interaction.reply('No open question right now'); 
+            return; 
+        }
+        try {
+            const question = levelMap[session.level];
+            const q = question[session.currentIndex];
+            const userAnswer = interaction.fields.getTextInputValue('answerInput');
+            await interaction.reply({
+                content: `**Your answer:** ${userAnswer}\n\n**Model answer:** ${q.answer}`,
+                flags: MessageFlags.Ephemeral
+            });
+
+            session.currentIndex++
+            session.awaitingAnswer = false
+            session.sentToday++
+
+            await sendNextQuestion(userId);
+        } catch (error) {
+            console.error("Error processing modal submission:", error);
+        }
+    }
+
+
 });
 
 
-// LOGIN TO DISCORD WITH TOKEN
+
+cron.schedule('0 8 * * *', () => {
+    for ( const [userId, session] of activeSessions) {
+        session.sentToday = 0;
+        session.lastResetDate = Date.now();
+        sendNextQuestion(userId);
+    }
+});
 
 client.login(process.env.DISCORD_TOKEN);
