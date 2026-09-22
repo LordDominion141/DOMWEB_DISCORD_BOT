@@ -13,6 +13,7 @@ import { activeSessions } from './states/activeSessions.js';
 import cron from 'node-cron';
 import 'dotenv/config';
 import { helpMessage } from './components/helpMessage.js';
+import express from 'express';
 
 
 const client = new Client({ 
@@ -227,4 +228,27 @@ cron.schedule('0 8 * * *', () => {
     }
 });
 
+
+
+
+
+
+// CREATE EXPRESS SERVER
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Simple health check endpoint for Render
+app.get('/', (req, res) => res.send('Bot is alive!'));
+
+app.listen(PORT, () => {
+    console.log(`Web server listening on port ${PORT}`);
+});
+
+
+
+
+
+
+// LOGIN TO DISCORD
 client.login(process.env.DISCORD_TOKEN);
