@@ -247,7 +247,13 @@ app.listen(PORT, () => {
 
 
 
+const RENDER_URL = 'https://my-discord-bot.onrender.com'; 
 
+setInterval(() => {
+    fetch(RENDER_URL)
+        .then(() => console.log('Self-ping successful: Keeping bot awake.'))
+        .catch((err) => console.error('Self-ping failed:', err.message));
+}, 10 * 60 * 1000); // 10 minutes
 
 
 // LOGIN TO DISCORD
