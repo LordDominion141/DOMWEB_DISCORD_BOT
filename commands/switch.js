@@ -1,12 +1,13 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { clearIntervals } from '../components/clearIntervals.js';
+import { activeSessions } from '../states/activeSessions.js';
 import row from '../components/menu.js';
 
 export const switchCmd = {
     data: new SlashCommandBuilder().setName('switch').setDescription('Switch to a different level'),
     async execute(interaction) {
         // 1. Clear any active session and capture the result status
-        const wasCleared = clearIntervals(interaction);
+        const wasCleared = activeSessions.delete(interaction.user.id);
+
 
         // 2. Set the text content dynamically based on the session status
         const responseContent = wasCleared 
