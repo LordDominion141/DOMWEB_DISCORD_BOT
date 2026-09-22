@@ -16,10 +16,10 @@ export const helpMessage = new EmbedBuilder()
         },
         { 
         name: '🎯 Commands', 
-        value: '`/start` — pick your level and begin\n`/switch` — change your level\n`/stop` — pause the daily questions\n`/answer` — submit your answer to the current question\n`/sources` — get reference links for the current question' 
+        value: '`/start` — pick your level and begin\n`/switch` — change your level\n`/stop` — pause the daily questions\n`/answer` — submit your answer to the current question\n`/sources` — get reference links for the current question\n `/help` — Get help getting started with DomWeb ' 
         }
 )       
         .setFooter({ text: 'DomWeb • Built by Lord Dominion'})
         .setTimestamp()
-        .setThumbnail('https://github.com/LordDominion141/DOMWEB_DISCORD_BOT/blob/main/assets/ChatGPT%20Image%20Sep%2018,%202026,%2009_56_13%20AM.png');
+        .setThumbnail('https://raw.githubusercontent.com/LordDominion141/DOMWEB_DISCORD_BOT/main/assets/ChatGPT%20Image%20Sep%2018%2C%202026%2C%2009_56_13%20AM.png');
       
