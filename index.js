@@ -1,10 +1,10 @@
 import { Client, Events, GatewayIntentBits, MessageFlags, Collection, ActionRowBuilder, Partials } from 'discord.js';
-import { pingCmd } from './commands/ping.js';
 import { startCmd } from './commands/start.js';
 import { stopCmd } from './commands/stop.js';
 import { switchCmd } from './commands/switch.js';
 import { answerCmd } from './commands/answer.js';
 import { sourceCmd } from './commands/source.js';
+import { helpCmd } from './commands/help.js';
 import { beginnerQuestions } from './db/beginner.js';
 import { intermediateQuestions } from './db/intermediate.js';
 import { advancedQuestions } from './db/advanced.js'
@@ -12,6 +12,7 @@ import { sendMessage } from './operations/sendMessage.js';
 import { activeSessions } from './states/activeSessions.js';
 import cron from 'node-cron';
 import 'dotenv/config';
+import { helpMessage } from './components/helpMessage.js';
 
 
 const client = new Client({ 
@@ -24,7 +25,7 @@ const client = new Client({
 
 
 client.commands = new Collection();
-const commandsArray = [pingCmd, startCmd, stopCmd, switchCmd, answerCmd, sourceCmd];
+const commandsArray = [startCmd, stopCmd, switchCmd, answerCmd, sourceCmd, helpCmd];
 
 for (const cmd of commandsArray) {
     client.commands.set(cmd.data.name, cmd);
@@ -167,6 +168,13 @@ if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
             dailyLimit: 5,
             lastResetDate: Date.now()
         };
+
+        const user = await client.users.fetch(userId);
+        const welcomeMessage = await user.send({
+            embeds: [helpMessage]
+        });
+
+        await welcomeMessage.pin();
 
         activeSessions.set(userId, session);
         await sendNextQuestion(userId);

@@ -1,11 +1,12 @@
 import { REST, Routes } from 'discord.js';
-import { pingCmd } from './commands/ping.js';
 import { startCmd } from './commands/start.js';
 import { stopCmd } from './commands/stop.js';
 import { switchCmd } from './commands/switch.js';
 import { answerCmd } from './commands/answer.js';
 import { sourceCmd } from './commands/source.js';
+import { helpCmd } from './commands/help.js';
 import 'dotenv/config';
+
 
 
 
@@ -14,12 +15,12 @@ import 'dotenv/config';
 const commands = [];
 
 // START PUSHING ALL OF THEM INTO THE ARRAY
-commands.push(pingCmd.data.toJSON());
 commands.push(startCmd.data.toJSON());
 commands.push(stopCmd.data.toJSON());
 commands.push(switchCmd.data.toJSON());
 commands.push(answerCmd.data.toJSON());
 commands.push(sourceCmd.data.toJSON());
+commands.push(helpCmd.data.toJSON());
 
 
 // Construct and prepare an instance of the REST module
