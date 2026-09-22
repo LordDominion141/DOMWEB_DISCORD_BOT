@@ -1,0 +1,1 @@
+<img alt='Thumbnail' src='./assets/ChatGPT Image Sep 18, 2026, 09_56_13 AM.png'>
