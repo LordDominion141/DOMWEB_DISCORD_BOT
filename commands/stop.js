@@ -1,11 +1,14 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { clearIntervals } from '../components/clearIntervals.js';
+import { activeSessions } from '../states/activeSessions.js';
 
 export const stopCmd = {
     data: new SlashCommandBuilder().setName('stop').setDescription('Stops the application'),
     async execute(interaction) {
-        
-        await clearIntervals(interaction);
+        const session = activeSessions.get(interaction.user.id);
+        if (!session) {
+            return;
+        }
+        activeSessions.delete(interaction.user.id);
 
         try {
             await interaction.reply('Stopped. Run /start to begin again');
