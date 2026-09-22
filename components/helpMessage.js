@@ -21,5 +21,5 @@ export const helpMessage = new EmbedBuilder()
 )       
         .setFooter({ text: 'DomWeb • Built by Lord Dominion'})
         .setTimestamp()
-        .setThumbnail('https://avatars.githubusercontent.com/u/235669238?s=400&u=f958abddbda2dd3e73d420513611aabdb1736b5c&v=4');
+        .setThumbnail('https://github.com/LordDominion141/DOMWEB_DISCORD_BOT/blob/main/assets/ChatGPT%20Image%20Sep%2018,%202026,%2009_56_13%20AM.png');
       
