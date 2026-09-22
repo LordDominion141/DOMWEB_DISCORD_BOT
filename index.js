@@ -247,7 +247,7 @@ app.listen(PORT, () => {
 
 
 
-const RENDER_URL = 'https://my-discord-bot.onrender.com'; 
+const RENDER_URL = 'https://domweb-discord-bot.onrender.com'; 
 
 setInterval(() => {
     fetch(RENDER_URL)
