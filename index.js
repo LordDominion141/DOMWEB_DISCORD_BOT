@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, MessageFlags, Collection, ActionRowBuilder } from 'discord.js';
+import { Client, Events, GatewayIntentBits, MessageFlags, Collection, ActionRowBuilder, Partials } from 'discord.js';
 import { pingCmd } from './commands/ping.js';
 import { startCmd } from './commands/start.js';
 import { stopCmd } from './commands/stop.js';
@@ -14,7 +14,14 @@ import cron from 'node-cron';
 import 'dotenv/config';
 
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ 
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.DirectMessages
+  ],
+  partials: [Partials.Channel] // Required to receive and route DM events without caching issues
+});
+
 
 client.commands = new Collection();
 const commandsArray = [pingCmd, startCmd, stopCmd, switchCmd, answerCmd, sourceCmd];
@@ -33,26 +40,49 @@ client.once(Events.ClientReady, (readyClient) => {
 
 
 // CORE FUNCTION
-    const sendNextQuestion = (userId) => {
-        const session = activeSessions.get(userId);
-        if (!session) return;
-        if (session.awaitingAnswer) return;
-        if (session.sentToday >= session.dailyLimit) return;
+const sendNextQuestion = async (userId) => {
+    const session = activeSessions.get(userId);
+    if (!session) return;
+    if (session.awaitingAnswer) return;
 
-        const questions = levelMap[session.level];
+    const questions = levelMap[session.level];
+    if (!questions) return;
 
-        if (session.currentIndex >= questions.length) {
-            sendMessage('YOU HAVE COMPLETED THIS LEVEL', client, userId);
-            activeSessions.delete(userId);
-            return;
+    // 1. Check completion FIRST (runs even if daily limit is reached)
+    if (session.currentIndex >= questions.length) {
+        try {
+            await sendMessage('🎉 YOU HAVE COMPLETED THIS LEVEL!', client, userId);
+        } catch (err) {
+            console.error("Failed to send completion message:", err);
         }
-        const q = questions[session.currentIndex]
+        activeSessions.delete(userId);
+        return;
+    }
 
-        if (questions[session.currentIndex]) {
-            sendMessage(`**Q ${session.currentIndex + 1}:** ${q.question}\n\nUse /answer to respond, or /sources for references.`, client, userId);
+    // 2. Check daily limit SECOND (stops sending new questions for the day)
+    if (session.sentToday >= session.dailyLimit) {
+         try {
+            await sendMessage("🎉 YOU HAVE COMPLETED TODAY'S SET OF QUESTIONS!", client, userId);
+        } catch (err) {
+            console.error("Failed to send completion message:", err);
+        }
+        return;
+    }
+
+    // 3. Send the next question
+    const q = questions[session.currentIndex];
+    if (q) {
+        try {
+            await sendMessage(`**Q ${session.currentIndex + 1}:** ${q.question}\n\nUse /answer to respond, or /sources for references.`, client, userId);
             session.awaitingAnswer = true;
+        } catch (err) {
+            console.error("Failed to send question message:", err);
         }
-    };
+    }
+};
+
+
+
 
      const levelMap = {
         beginner: beginnerQuestions,
@@ -105,49 +135,47 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 
     // 2. Handle String Select Menus
-    if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
-        try {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
+    try {
+        const selectedValue = interaction.values[0].toLowerCase();
+        const questions = levelMap[selectedValue];
 
-            // Disable select menu component to prevent double submissions
-            const row = ActionRowBuilder.from(interaction.message.components[0]);
-            row.components[0].setDisabled(true);
-            await interaction.message.edit({ components: [row] });
-
-            const selectedValue = interaction.values[0].toLowerCase();
-
-            const session = {
-                level: selectedValue,
-                currentIndex: 0,
-                awaitingAnswer: false,
-                sentToday: 0,
-                dailyLimit: 10,
-                lastResetDate: Date.now()
-            };
-
-           
-
-            const questions = levelMap[selectedValue];
-            if (!questions) {
-                return await interaction.editReply({ content: "❌ Invalid level array configuration found." });
-            }
-
-            await interaction.editReply({ 
-                content: `Your JavaScript subject submission of **${selectedValue}** was received successfully!` 
+        if (!questions) {
+            return await interaction.reply({ 
+                content: "❌ Invalid level array configuration found.",
+                flags: MessageFlags.Ephemeral 
             });
-
-
-
-            activeSessions.set(userId, session);
-            sendNextQuestion(userId);
-
-        } catch (error) {
-            console.error("Error handling select menu:", error);
         }
-        return;
+
+        // Disable the select menu component directly via interaction.update()
+        const row = ActionRowBuilder.from(interaction.message.components[0]);
+        row.components[0].setDisabled(true);
+
+        // Update original message to disable menu AND reply ephemerally to user
+        await interaction.update({ components: [row] });
+        
+        await interaction.followUp({ 
+            content: `Your JavaScript subject submission of **${selectedValue}** was received successfully!`,
+            flags: MessageFlags.Ephemeral
+        });
+
+        const session = {
+            level: selectedValue,
+            currentIndex: 0,
+            awaitingAnswer: false,
+            sentToday: 0,
+            dailyLimit: 5,
+            lastResetDate: Date.now()
+        };
+
+        activeSessions.set(userId, session);
+        await sendNextQuestion(userId);
+
+    } catch (error) {
+        console.error("Error handling select menu:", error);
     }
-
-
+    return;
+}
     
 
 
@@ -172,34 +200,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             session.awaitingAnswer = false
             session.sentToday++
 
-            sendNextQuestion(userId);
+            await sendNextQuestion(userId);
         } catch (error) {
             console.error("Error processing modal submission:", error);
         }
     }
 
 
-
-
-    // 4. HANDLE SOURCE COMMAND
-    /* 
-    ON /sources command:
-    session = activeSessions.get(userId)
-    IF no session OR NOT session.awaitingAnswer:
-        REPLY "No open question to show sources for."
-        RETURN
-
-    questions = levelMap[session.level]
-    q = questions[session.currentIndex]
-
-    IF q.sources is empty:
-        REPLY "No sources tagged for this one."
-    ELSE:
-        list = FORMAT q.sources as "- {title}: {url}" joined by newlines
-        REPLY (ephemeral): list
-    // note: does NOT touch awaitingAnswer — they can check sources,
-    // then still submit /answer afterward
-    */
 });
 
 
