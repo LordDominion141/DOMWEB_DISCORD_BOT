@@ -169,12 +169,17 @@ if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
             lastResetDate: Date.now()
         };
 
-        const user = await client.users.fetch(userId);
-        const welcomeMessage = await user.send({
-            embeds: [helpMessage]
+        try {
+            const user = await client.users.fetch(userId);
+            const welcomeMessage = await user.send({
+                  embeds: [helpMessage]
         });
 
         await welcomeMessage.pin();
+        } catch (error) {
+            console.error('Error sending welcome message', error);
+        }
+        
 
         activeSessions.set(userId, session);
         await sendNextQuestion(userId);
