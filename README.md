@@ -101,5 +101,8 @@ This bot is configured to run seamlessly on **Render's Free Tier**:
 
 ---
 
+## Join The Community on Discord to Test Out The Bot: 
+https://discord.gg/Z75QvNtKc
+
 ## 📜 License
 This project is open-source and available under the **MIT License**.
