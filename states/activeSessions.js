@@ -1,30 +1,34 @@
 import { MongoClient } from 'mongodb';
 
-// Initialize MongoDB Client
-// Provide a fake fallback string so local scripts like deploy-commands.js don't crash
-const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/dummy";
-const client = new MongoClient(mongoUri);
+// Check if MONGODB_URI exists in the production environment
+const mongoUri = process.env.MONGODB_URI;
 
+let client;
 let db;
 let collection;
-const isConnected = false; // Track connection status
+let isConnected = false; // Will properly change to true once connected
 
 // Cache object to mimic standard synchronous Map lookups for index.js
 const sessionCache = {};
 
 const initMongo = async () => {
-    // If it's the dummy local fallback, don't try to connect
-    if (mongoUri.includes("localhost")) {
-        console.log("⚠️ Running in local command deployment mode. Skipping MongoDB connection.");
+    // If the variable is missing completely, skip to protect local deployment scripts
+    if (!mongoUri) {
+        console.log("⚠️ MONGODB_URI environment variable is missing. Running in offline fallback mode.");
         return;
     }
 
     try {
+        client = new MongoClient(mongoUri);
         await client.connect();
+        
         db = client.db('domweb_bot');
         collection = db.collection('sessions');
+        isConnected = true; // CRITICAL FIX: Update connection status flag
+        
         console.log("🍃 MongoDB database connected successfully.");
 
+        // Pull current states from cloud database into local memory on boot
         const cursor = collection.find({});
         const allSessions = await cursor.toArray();
         
@@ -34,15 +38,16 @@ const initMongo = async () => {
         console.log(`Synced ${allSessions.length} user sessions from MongoDB.`);
     } catch (err) {
         console.error("Failed to connect to MongoDB:", err);
+        isConnected = false;
     }
 };
 
 initMongo();
 
-// Helper to prevent crashes if DB isn't ready yet
+// Helper to check connection readiness
 const ensureConnected = () => {
     if (!isConnected || !collection) {
-        throw new Error("MongoDB client is not connected yet. Please wait for initMongo to complete.");
+        throw new Error("MongoDB client is not connected to the cloud cluster yet.");
     }
 };
 
@@ -60,7 +65,6 @@ export const activeSessions = {
                 
                 try {
                     ensureConnected();
-                    // Fixed: Removed the backslash before \$set
                     collection.updateOne(
                         { user_id: userId },
                         { $set: { session_data: sessionCache[userId] } },
@@ -79,7 +83,6 @@ export const activeSessions = {
         sessionCache[userId] = sessionData;
         try {
             ensureConnected();
-            // Fixed: Removed the backslash before \$set
             await collection.updateOne(
                 { user_id: userId },
                 { $set: { session_data: sessionData } },
