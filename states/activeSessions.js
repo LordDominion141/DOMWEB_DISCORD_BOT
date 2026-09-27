@@ -1,69 +1,112 @@
-import fs from 'fs';
-import path from 'path';
+import { MongoClient } from 'mongodb';
 
-const filePath = path.resolve('./sessions.json');
+// Initialize MongoDB Client
+// Provide a fake fallback string so local scripts like deploy-commands.js don't crash
+const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017/dummy";
+const client = new MongoClient(mongoUri);
 
-// Helper to load sessions from the JSON file safely
-const loadSessions = () => {
+let db;
+let collection;
+const isConnected = false; // Track connection status
+
+// Cache object to mimic standard synchronous Map lookups for index.js
+const sessionCache = {};
+
+const initMongo = async () => {
+    // If it's the dummy local fallback, don't try to connect
+    if (mongoUri.includes("localhost")) {
+        console.log("⚠️ Running in local command deployment mode. Skipping MongoDB connection.");
+        return;
+    }
+
     try {
-        if (fs.existsSync(filePath)) {
-            const data = fs.readFileSync(filePath, 'utf8');
-            return JSON.parse(data || '{}');
+        await client.connect();
+        db = client.db('domweb_bot');
+        collection = db.collection('sessions');
+        console.log("🍃 MongoDB database connected successfully.");
+
+        const cursor = collection.find({});
+        const allSessions = await cursor.toArray();
+        
+        for (const doc of allSessions) {
+            sessionCache[doc.user_id] = doc.session_data;
         }
-    } catch (error) {
-        console.error("Failed to load sessions from file, starting fresh:", error);
-    }
-    return {};
-};
-
-// Helper to save sessions to the JSON file safely
-const saveSessions = (data) => {
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    } catch (error) {
-        console.error("Failed to save sessions to file:", error);
+        console.log(`Synced ${allSessions.length} user sessions from MongoDB.`);
+    } catch (err) {
+        console.error("Failed to connect to MongoDB:", err);
     }
 };
 
-// Initial load
-const sessionsStore = loadSessions();
+initMongo();
+
+// Helper to prevent crashes if DB isn't ready yet
+const ensureConnected = () => {
+    if (!isConnected || !collection) {
+        throw new Error("MongoDB client is not connected yet. Please wait for initMongo to complete.");
+    }
+};
 
 export const activeSessions = {
-    has: (userId) => Object.prototype.hasOwnProperty.call(sessionsStore, userId),
+    has: (userId) => Object.prototype.hasOwnProperty.call(sessionCache, userId),
     
     get: (userId) => {
-        const session = sessionsStore[userId];
+        const session = sessionCache[userId];
         if (!session) return null;
 
-        // Wrap the session object in a Proxy.
-        // This intercepts changes (like session.sentToday = 0) and autosaves them!
+        // Proxy intercepts direct updates (like session.sentToday++) and autosaves to MongoDB
         return new Proxy(session, {
             set(target, prop, value) {
                 target[prop] = value;
-                saveSessions(sessionsStore);
+                
+                try {
+                    ensureConnected();
+                    // Fixed: Removed the backslash before \$set
+                    collection.updateOne(
+                        { user_id: userId },
+                        { $set: { session_data: sessionCache[userId] } },
+                        { upsert: true }
+                    ).catch(err => console.error("Async MongoDB update failed:", err));
+                } catch (err) {
+                    console.error("Proxy update blocked:", err.message);
+                }
+
                 return true;
             }
         });
     },
     
-    set: (userId, sessionData) => {
-        sessionsStore[userId] = sessionData;
-        saveSessions(sessionsStore);
+    set: async (userId, sessionData) => {
+        sessionCache[userId] = sessionData;
+        try {
+            ensureConnected();
+            // Fixed: Removed the backslash before \$set
+            await collection.updateOne(
+                { user_id: userId },
+                { $set: { session_data: sessionData } },
+                { upsert: true }
+            );
+        } catch (err) {
+            console.error(`Failed to save session for user ${userId} to MongoDB:`, err);
+        }
     },
     
-    delete: (userId) => {
-        if (sessionsStore[userId]) {
-            delete sessionsStore[userId];
-            saveSessions(sessionsStore);
-            return true;
+    delete: async (userId) => {
+        if (sessionCache[userId]) {
+            delete sessionCache[userId];
+            try {
+                ensureConnected();
+                await collection.deleteOne({ user_id: userId });
+                return true;
+            } catch (err) {
+                console.error(`Failed to delete session for user ${userId} from MongoDB:`, err);
+            }
         }
         return false;
     },
     
-    // Mimics the entries iterator used for my node-cron schedule block
+    // Keeps your node-cron schedule block iteration fully functional
     [Symbol.iterator]: function* () {
-        for (const userId of Object.keys(sessionsStore)) {
-            // Re-use the get method so the cron loop elements are also proxy-wrapped and autosaved
+        for (const userId of Object.keys(sessionCache)) {
             yield [userId, this.get(userId)];
         }
     }

@@ -190,6 +190,7 @@ if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
 
 
     // 3. Handle Modal Submissions
+        // 3. Handle Modal Submissions
     if (interaction.isModalSubmit() && interaction.customId === 'answer-modal') {
         const session = activeSessions.get(userId);
         if (!session || !session.awaitingAnswer) { 
@@ -205,15 +206,21 @@ if (interaction.isStringSelectMenu() && interaction.customId === 'starter') {
                 flags: MessageFlags.Ephemeral
             });
 
-            session.currentIndex++
-            session.awaitingAnswer = false
-            session.sentToday++
+            // 1. Update the local variable values
+            session.currentIndex++;
+            session.awaitingAnswer = false;
+            session.sentToday++;
 
+            // 2. CRITICAL FIX: Explicitly re-save the updated session back into the database file!
+            activeSessions.set(userId, session); 
+
+            // 3. Now it is safe to check boundaries and send the next question
             await sendNextQuestion(userId);
         } catch (error) {
             console.error("Error processing modal submission:", error);
         }
     }
+
 
 
 });
@@ -224,9 +231,14 @@ cron.schedule('0 8 * * *', () => {
     for ( const [userId, session] of activeSessions) {
         session.sentToday = 0;
         session.lastResetDate = Date.now();
+        
+        // CRITICAL FIX: Make sure this loop saves back down to the file too!
+        activeSessions.set(userId, session); 
+        
         sendNextQuestion(userId);
     }
 });
+
 
 
 
