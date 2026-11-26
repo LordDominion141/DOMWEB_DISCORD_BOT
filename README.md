@@ -1,181 +1,108 @@
-# Plugins, agents, and skills for AI coding tools
+# DomWeb Bot 🤖
+<img alt='Thumbnail' src='./assets/ChatGPT Image Sep 18, 2026, 09_56_13 AM.png'>
 
-<a id="agentic-plugin-marketplace"></a>
-<a id="claude-code-plugins-agents-and-skills"></a>
 
-**New:** A deterministic judge scored the Verified versions of two workflows. [See the scorecards](docs/verified/README.md) or join the [agents Verified waitlist](https://buy.polar.sh/polar_cl_yAj2XSCMpSY3vYTcoymlT102uGuJIAKgAI6134QYG9n). Verified is a paid product from Major7 Apps, founded by this repository’s maintainer.
 
-Use one collection of plugins, agents, skills, and commands across Claude Code, OpenAI Codex CLI, Cursor, OpenCode, Antigravity CLI, GitHub Copilot, and Pi. A harness is the coding tool that loads and runs the components.
+DomWeb Bot is an automated JavaScript learning companion for Discord. It delivers a curated progression of daily coding questions directly to users via Direct Messages (DMs), tracks individual progress across skill tiers, handles modal-based answer submissions, and automatically resets daily quotas using a scheduled cron routine.
 
-Contributors write each component once, in Markdown, in the Claude Code plugin format. Adapters under `tools/adapters/` generate the format each harness reads, map model aliases to that harness's models, and translate tool permissions where the harness supports them. CI regenerates the artifacts for every harness, validates them, and runs the OpenCode, Antigravity CLI, and Pi artifacts through their installed CLIs. The [capability matrix](docs/harnesses.md) lists what each harness supports, and [ARCHITECTURE.md](ARCHITECTURE.md) describes the design.
+## 🚀 Features
 
-The catalog contains 93 plugins, including 91 local plugins and 2 external entries. The local source contains 199 agents, 185 skills, and 103 commands. Plugins cover Python and JavaScript development, code review, testing, infrastructure, security, and other work.
+- **Multi-Tier Curriculum:** Delivers questions categorized into `Beginner`, `Intermediate`, and `Advanced` levels.
+- **Robust State Persistence:** Implements a proxy-wrapped, file-backed `sessions.json` engine. User states automatically save on modification and persist across server restarts.
+- **Slash Commands & Modals:** Uses Discord's modern layout framework to present visual form overlays (`ModalBuilder`) for answering questions cleanly.
+- **Automated Pacing:** Uses `node-cron` to automatically refresh daily allowances and distribute questions at scheduled intervals.
+- **DM Isolation:** Interacts entirely in private DMs so user workflows do not clutter public text channels.
 
-## Multi-harness support
+---
 
-Choose the harness you use and follow its setup route. Available components depend on the installation route and the harness's capabilities.
+## 🛠️ Commands Available
 
-| Tool | Installation | Components and limits |
-|---|---|---|
-| [Claude Code](#claude-code) | Plugin marketplace | Source agents, skills, and commands; plugin-specific hooks and MCP configuration |
-| [OpenAI Codex CLI](#codex-cli) | Native marketplace or generated artifacts | Native source skills; generated TOML agents and commands as skills use a separate route |
-| [Cursor](#cursor) | Plugin marketplace | Source agents, skills, and commands, with curated project rules |
-| [OpenCode](#install-from-a-clone) | `make install-opencode` | Generated agents, skills, and commands, with translated tool permissions |
-| [Antigravity CLI](#install-from-a-clone) | `make install-antigravity` | Generated plugins containing agents, skills, and commands |
-| [GitHub Copilot](#install-from-a-clone) | `make install-copilot` | Generated agent profiles and skills; commands also become invocable skills |
-| [Pi](#install-from-a-clone) | `make install-pi` | Generated skills and prompt templates; agents require a subagent extension |
+| Command | Description |
+| :--- | :--- |
+| `/start` | Select your level from a select menu and initialize your learning routine. |
+| `/switch` | Modify your active skill level tier. |
+| `/stop` | Halt your daily questioning routine. |
+| `/answer` | Triggers a multi-line popup text field (`Modal`) to submit an explanation. |
+| `/source` | Fetches code documentation references for the active question. |
+| `/help` | Pins a helpful guide containing operational syntax rules. |
 
-See the [capability matrix](docs/harnesses.md) for model mappings, tool permissions, hooks, and installation differences.
+---
 
-For individual skills, use a [skills-only installer](#skills-only) and select your coding tool.
-
-## How it works
-
-A plugin groups related agents, skills, and commands under `plugins/`. For example, `python-development` contains three agents, sixteen skills, and a scaffolding command. The chosen harness loads the installed components according to its own discovery and invocation rules.
-
-Contributors maintain one Markdown source in the Claude Code plugin format. Native registries point to that source where supported, and adapters generate the formats needed by each harness. Commands may become skills or prompt templates, and agent formats, model choices, and tool permissions vary by harness.
-
-Source agents specify model aliases such as `opus`, `sonnet`, `haiku`, `fable`, or `inherit`. Adapters map those aliases to each harness's model settings, including fixed defaults for some `inherit` entries. See [model configuration](docs/agents.md#model-configuration) and the [adapter mappings](tools/adapters/capabilities.py).
-
-## Quality evaluation
-
-The repository validates plugin structure, generated artifacts, and documentation. Contributors can run these checks from the repository root:
-
-```bash
-make generate-all
-make validate STRICT=1
-make garden
-```
-
-[`plugin-eval`](plugins/plugin-eval/) also provides static skill checks without model calls. For example:
-
-```bash
-uv run --project plugins/plugin-eval plugin-eval score plugins/python-development/skills/python-testing-patterns --depth quick
-```
-
-The LLM judge and Monte Carlo layers are experimental and are not validated against human labels. Their scores describe model assessments and repeated simulations and do not prove that a task succeeds in a project. They require the optional `llm` dependencies. Model calls use `ANTHROPIC_API_KEY` when it is set and bill that API account. Otherwise they use your Claude Code login. See the [evaluation guide](docs/plugin-eval.md) for setup and limits.
-
-## Verified workflows
-
-Some workflows in this repo are being measured. Each one runs on a fixed set of test cases, several times per harness and model, and the results are published with confidence intervals. Runs repeat after each Claude Code release, and other coding tools join as their runs are wired up.
-
-- Method and current scores: [docs/verified](docs/verified/README.md)
-- Join the [waitlist for agents Verified](https://buy.polar.sh/polar_cl_yAj2XSCMpSY3vYTcoymlT102uGuJIAKgAI6134QYG9n), the tuned and re-tested versions.
-
-The free catalog stays MIT and keeps getting updates. Verified is a separate, paid layer sold by Major7 Apps, which this repository's maintainer founded. To support the free catalog directly, see [SPONSORING.md](SPONSORING.md).
-
-## Quick start
-
-Choose a plugin for the work you do:
-
-| Plugin | Use it for |
-|---|---|
-| [python-development](plugins/python-development/) | Python, Django, FastAPI, testing, and packaging |
-| [javascript-typescript](plugins/javascript-typescript/) | JavaScript and TypeScript development and project setup |
-| [developer-essentials](plugins/developer-essentials/) | Code review, debugging, Git, and testing patterns |
-| [security-scanning](plugins/security-scanning/) | Security review, dependency checks, and code scanning |
-
-See the [plugin catalog](docs/plugins.md) for all 93 plugins and the [usage guide](docs/usage.md) for commands and examples.
-
-### Claude Code
-
-Run these commands inside Claude Code to register the marketplace and install the Python development plugin:
+## 📁 File Structure Overview
 
 ```text
-/plugin marketplace add wshobson/agents
-/plugin install python-development@claude-code-workflows
+domweb-bot/
+├── commands/            # Slash command execution files
+│   ├── answer.js
+│   ├── help.js
+│   ├── ping.js
+│   ├── source.js
+│   ├── start.js
+│   ├── stop.js
+│   └── switch.js
+├── components/          # Reusable UI overlays (Modals, Embeds)
+│   ├── answerModal.js
+│   └── helpMessage.js
+├── db/                  # Curriculum question banks & arrays
+│   ├── advanced.js
+│   ├── beginner.js
+│   └── intermediate.js
+├── operations/          # Direct messaging handling routines
+│   └── sendMessage.js
+├── states/              # State storage and persistence layers
+│   └── activeSessions.js
+├── .env                 # Protected environment secrets
+├── .gitignore           # File exclusion mapping for Git
+├── index.js             # Bot entrypoint & event coordinator
+├── package.json         # Dependency configuration manifest
+└── sessions.json        # Automatically generated persistent storage
 ```
 
-Then ask Claude to use the Python agents for your task, or run the plugin's scaffolding command:
+---
 
-```text
-/python-development:python-scaffold Create a FastAPI service with tests
-```
+## 💻 Local Setup & Installation
 
-### Codex CLI
+### 1. Prerequisites
+Ensure you have **Node.js (v18.x or later)** installed on your machine.
 
-Run these commands in a terminal with a current Codex CLI:
-
+### 2. Clone and Install Dependencies
+Navigate into your project folder and run:
 ```bash
-codex plugin marketplace add wshobson/agents
-codex plugin add python-development@claude-code-workflows
+npm install
 ```
 
-The native Codex manifests expose source skills. The generated TOML agents and command-derived skills use a separate adapter path. Native installation also reads the original skill bodies, while generated copies split oversized bodies into reference files for the 8 KB budget. See the [Codex setup details](docs/harnesses.md#native-install) before choosing an installation route.
+### 3. Configure Environment Variables
+Create a file named `.env` in the root directory and append your secure application data:
+```env
+DISCORD_TOKEN=your_bot_token_here
+USER_ID=your_discord_account_id
+PORT=3000
+```
 
-### Cursor
-
-Cursor uses the committed [plugin marketplace registry](.cursor-plugin/marketplace.json). Follow the [Cursor setup instructions](docs/harnesses.md#native-install) to add the marketplace and install a plugin.
-
-<a id="skills-only-gh-skill-npx-skills"></a>
-<a id="skills-only-gh-skill--npx-skills"></a>
-
-### Skills only
-
-Install an individual skill with GitHub CLI's `gh skill` command or the `npx skills` installer. Select your coding tool when prompted. Both installers read skills from GitHub without cloning the repository and install them without the plugin's agents, commands, or hooks.
-
+### 4. Run the Bot Locally
+For continuous development mode (auto-restarts when files change):
 ```bash
-gh skill install wshobson/agents python-testing-patterns
-npx skills add wshobson/agents --skill python-testing-patterns
+npm run dev
 ```
-
-`gh skill` requires GitHub CLI 2.90 or later. The `npx` command requires Node.js and npm. See [skills-only installation](docs/harnesses.md#skills-only-installers) for other agents, install scopes, and version pinning.
-
-<a id="codex-cli--cursor--opencode--antigravity-cli--copilot--pi"></a>
-<a id="opencode-antigravity-cli-copilot-and-pi"></a>
-
-### Install from a clone
-
-For OpenCode, Antigravity CLI, GitHub Copilot, and Pi, clone the repository and use the installer for your harness. Install [uv](https://docs.astral.sh/uv/getting-started/installation/), Python 3.12 or later, and the coding tool you want to use. The following clone command uses GitHub CLI:
-
+To run the standard deployment execution command:
 ```bash
-gh repo clone wshobson/agents ~/agents
-cd ~/agents
+npm start
 ```
 
-Run the command for your tool. Each target generates the artifacts and links all local plugins into that tool's user configuration:
+---
 
-```bash
-make install-opencode
-make install-antigravity
-make install-copilot
-make install-pi
-```
+## 🌐 Deployment Configuration (Render)
 
-Pi's agents require its reference `subagent` extension or a compatible extension. See the [global install guide](docs/harnesses.md#global-install) for configuration paths and uninstall commands.
+This bot is configured to run seamlessly on **Render's Free Tier**:
 
-## What's inside
+1. **Keep-Alive Endpoint:** Contains an integrated `express` web service to satisfy Render's port binding (`PORT 3000`) and handle auto-pings to prevent container sleep intervals.
+2. **State Recovery:** Reads/writes local user structures safely via `sessions.json`. 
+   * *Note: Render's ephemeral filesystem wipes this file during new builds or server restarts. For permanent scalability, integrate a database driver.*
 
-| Component | Count | Purpose |
-|---|---:|---|
-| Plugins | 93 | Installable groups of components, including 91 local plugins and 2 external entries |
-| Agents | 199 | Instructions for specialist subagents that handle delegated work |
-| Skills | 185 | Guidance and reference material that an agent loads when relevant |
-| Commands | 103 | Named workflows you invoke, such as project scaffolding or a security scan |
+---
 
-The agent, skill, and command counts cover local source files. External plugins provide their own components and installation requirements.
+## Join The Community on Discord to Test Out The Bot: 
+https://discord.gg/Z75QvNtKc
 
-## Documentation map
-
-| Guide | Covers |
-|---|---|
-| [Plugin catalog](docs/plugins.md) | Plugins by task and domain |
-| [Agents](docs/agents.md) and [skills](docs/agent-skills.md) | Available components and model configuration |
-| [Usage](docs/usage.md) and [tool setup](docs/harnesses.md) | Commands, examples, and installation |
-| [Architecture](ARCHITECTURE.md) and [design details](docs/architecture.md) | Source layout and adapters |
-| [Quality evaluation](docs/plugin-eval.md) and [CLI verification](docs/round-trip-results.md) | Checks and their limits |
-| [Verified scorecards](docs/verified/README.md) | Measured pass rates and how they are produced |
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) to propose a change and [authoring conventions](docs/authoring.md) to write plugin content.
-
-## External memory integration
-
-[Pensyve](https://github.com/major7apps/pensyve) remains an optional external Claude Code marketplace entry. Major7 Apps maintains Pensyve, and this repository's maintainer founded Major7 Apps. Its open-source runtime can run locally or on your own server. [Pensyve Cloud closed on October 1, 2026](https://pensyve.com/), and its dashboard, API, and hosted MCP endpoints are unavailable. Use the [self-hosting guide](https://github.com/major7apps/pensyve/blob/main/docs/self-host.md) when configuring the runtime.
-
-## License
-
-The repository is [MIT licensed](LICENSE). External plugins have their own licenses.
-
-## Star history
-
-[![Star History Chart](https://star-history.dera.page/svg?repos=wshobson/agents&type=date&legend=top-left)](https://star-history.dera.page/#wshobson/agents&type=date&legend=top-left)
+## 📜 License
+This project is open-source and available under the **MIT License**.
